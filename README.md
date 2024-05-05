@@ -5,7 +5,7 @@ BarkWallet is a secure and innovative React Native cryptocurrency wallet applica
 ## Features
 
 ### Core Features
-- **Multiple Cryptocurrencies**: Supports Solana, Ethereum and more.
+- **Multiple Cryptocurrencies**: Supports Solana, BARK, Ethereum and more.
 - **Expo Framework**: Ensures consistent performance across all devices.
 - **Real-Time Blockchain Interaction**: Powered by the Alchemy API for secure transactions.
 
