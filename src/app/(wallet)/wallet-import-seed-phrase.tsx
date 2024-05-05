@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Dimensions, ScrollView } from "react-native";
+import { Dimensions, Keyboard, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native";
 import { router } from "expo-router";
 import { useDispatch } from "react-redux";
@@ -14,17 +14,15 @@ import {
   saveSolanaPublicKey,
   saveBarkAddress,
   saveBarkPublicKey,
-  setBarkSeedPhraseConfirmation,
 } from "../../store/walletSlice";
 import Button from "../../components/Button/Button";
 import { ROUTES } from "../../constants/routes";
 import { savePrivateKey } from "../../hooks/use-storage-state";
+import { setSeedPhraseConfirmation } from "../../hooks/use-storage-state";
 
 const SafeAreaContainer = styled(SafeAreaView)<{ theme: ThemeType }>`
   flex: 1;
   background-color: ${(props) => props.theme.colors.lightDark};
-  justify-content: center;
-  align-items: center;
 `;
 
 const ContentContainer = styled.View<{ theme: ThemeType }>`
@@ -67,10 +65,10 @@ const SeedTextInput = styled.TextInput<{ theme: ThemeType }>`
   margin: ${(props) => props.theme.spacing.large};
   background-color: ${(props) => props.theme.colors.dark};
   border-radius: ${(props) => props.theme.borderRadius.extraLarge};
-  min-height: 220px;
+  min-height: 135px;
   width: ${(Dimensions.get("window").width - 80).toFixed(0)}px;
   color: ${(props) => props.theme.colors.white};
-  font-size: ${(props) => props.theme.fonts.sizes.large};
+  font-size: ${(props) => props.theme.fonts.sizes.large};\
   font-family: ${(props) => props.theme.fonts.families.openRegular};
   border: 1px solid ${(props) => props.theme.colors.grey};
 `;
@@ -91,27 +89,32 @@ export default function Page() {
   const dispatch = useDispatch();
   const [textValue, setTextValue] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
 
   const handleVerifySeedPhrase = async () => {
     const errorText =
       "Looks like the seed phrase is incorrect. Please try again.";
+    if (!textValue.trim()) {
+      setError("Please enter your seed phrase.");
+      return;
+    }
     if (textValue.split(" ").length !== 12) {
       setError(errorText);
       return;
     }
+    setLoading(true);
 
     const importedWallets = restoreWalletFromPhrase(textValue);
     if (Object.keys(importedWallets).length > 0) {
-      const masterPrivateKey = importedWallets.ethereumWallet.privateKey;
-
-      const etherAddress = importedWallets.ethereumWallet.address;
-      const etherPublicKey = importedWallets.ethereumWallet.publicKey;
-
-      const solanaAddress = importedWallets.solanaWallet.publicKey.toBase58();
-      const solanaPublicKey = importedWallets.solanaWallet.publicKey.toBase58();
-
-      const barkAddress = "bark_address_example";
-      const barkPublicKey = "bark_public_key_example";
+      setLoading(false);
+      const { ethereumWallet, solanaWallet, barkWallet } = importedWallets;
+      const masterPrivateKey = ethereumWallet.privateKey;
+      const etherAddress = ethereumWallet.address;
+      const etherPublicKey = ethereumWallet.publicKey;
+      const solanaAddress = solanaWallet.publicKey.toBase58();
+      const solanaPublicKey = solanaWallet.publicKey.toBase58();
+      const barkAddress = barkWallet.address;
+      const barkPublicKey = barkWallet.publicKey;
 
       savePrivateKey(masterPrivateKey);
 
@@ -124,20 +127,21 @@ export default function Page() {
       dispatch(saveBarkAddress(barkAddress));
       dispatch(saveBarkPublicKey(barkPublicKey));
 
-      setBarkSeedPhraseConfirmation(true);
+      setSeedPhraseConfirmation(true);
 
       router.push({
         pathname: ROUTES.walletCreatedSuccessfully,
         params: { successState: "IMPORTED_WALLET" },
       });
     } else {
+      setLoading(false);
       setError(errorText);
     }
   };
 
   return (
     <SafeAreaContainer>
-      <ScrollView contentContainerStyle={{ paddingVertical: 50 }}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
         <ContentContainer>
           <TextContainer>
             <Title>Secret Recovery Phrase</Title>
@@ -148,10 +152,14 @@ export default function Page() {
           </TextContainer>
           <SeedTextInput
             autoCapitalize="none"
-            secureTextEntry={true}
             multiline
+            returnKeyType="done"
             value={textValue}
             onChangeText={setTextValue}
+            placeholder="Enter your seed phrase"
+            placeholderTextColor={theme.colors.grey}
+            blurOnSubmit
+            onSubmitEditing={() => Keyboard.dismiss()}
           />
         </ContentContainer>
       </ScrollView>
@@ -162,6 +170,7 @@ export default function Page() {
       )}
       <ButtonContainer>
         <Button
+          loading={loading}
           color={theme.colors.white}
           backgroundColor={theme.colors.primary}
           onPress={handleVerifySeedPhrase}

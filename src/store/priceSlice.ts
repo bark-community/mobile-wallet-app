@@ -17,23 +17,16 @@ const priceSlice = createSlice({
   name: "price",
   initialState,
   reducers: {
-    updateEthereumPrice(state, action: PayloadAction<number>) {
-      state.ethereum.usd = action.payload;
-    },
-    updateSolanaPrice(state, action: PayloadAction<number>) {
-      state.solana.usd = action.payload;
-    },
-    updateBarkPrice(state, action: PayloadAction<number>) {
-      state.bark.usd = action.payload;
+    updatePrice(state, action: PayloadAction<{ currency: "ethereum" | "solana" | "bark"; value: number }>) {
+      const { currency, value } = action.payload;
+      state[currency].usd = value;
     },
   },
 });
 
-export const { updateEthereumPrice, updateSolanaPrice, updateBarkPrice } = priceSlice.actions;
+export const { updatePrice } = priceSlice.actions;
 
 // Selectors
-export const selectEthereumPrice = (state: RootState) => state.price.ethereum.usd;
-export const selectSolanaPrice = (state: RootState) => state.price.solana.usd;
-export const selectBarkPrice = (state: RootState) => state.price.bark.usd;
+export const selectPrice = (state: RootState, currency: "ethereum" | "solana" | "bark") => state.price[currency].usd;
 
 export default priceSlice.reducer;

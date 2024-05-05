@@ -1,17 +1,12 @@
-import { TouchableOpacity } from "react-native";
+import React, { useCallback } from "react";
+import { TouchableOpacity, ViewPropTypes } from "react-native";
+import PropTypes from "prop-types";
 import styled from "styled-components/native";
-import { scale, verticalScale, moderateScale } from "react-native-size-matters";
-import { ThemeType } from "../../styles/theme";
 
-interface BubbleContainerProps {
-  smallBubble?: boolean;
-  theme: ThemeType;
-}
-
-const BubbleContainer = styled.View<BubbleContainerProps>`
+// Styled components for Bubble
+const BubbleContainer = styled.View`
   background-color: ${({ theme }) => theme.colors.dark};
-  padding: ${({ theme, smallBubble }) =>
-    smallBubble ? "0px" : theme.spacing.small};
+  padding: ${({ theme, smallBubble }) => (smallBubble ? "0px" : theme.spacing.small)};
   border-radius: ${({ theme }) => theme.borderRadius.extraLarge};
   border-width: 1px;
   border-color: ${({ theme }) => theme.colors.grey};
@@ -21,52 +16,66 @@ const BubbleContainer = styled.View<BubbleContainerProps>`
   flex-direction: row;
   align-items: center;
   justify-content: space-around;
-  width: ${({ smallBubble }) => (smallBubble ? scale(80) : scale(90))};
+  width: ${({ smallBubble }) => (smallBubble ? "80px" : "100px")};
 `;
 
-const BubbleText = styled.Text<{ theme: ThemeType }>`
-  font-family: ${(props) => props.theme.fonts.families.openBold};
-  font-size: ${(props) => props.theme.fonts.sizes.normal};
-  color: ${(props) => props.theme.fonts.colors.primary};
+const BubbleText = styled.Text`
+  font-family: ${({ theme }) => theme.fonts.families.openBold};
+  font-size: ${({ theme }) => theme.fonts.sizes.normal};
+  color: ${({ theme }) => theme.fonts.colors.primary};
 `;
 
-const BubbleNumber = styled.Text<{ theme: ThemeType }>`
-  font-family: ${(props) => props.theme.fonts.families.openBold};
-  font-size: ${(props) => props.theme.fonts.sizes.large};
-  color: ${(props) => props.theme.fonts.colors.primary};
+const BubbleNumber = styled.Text`
+  font-family: ${({ theme }) => theme.fonts.families.openBold};
+  font-size: ${({ theme }) => theme.fonts.sizes.large};
+  color: ${({ theme }) => theme.fonts.colors.primary};
 `;
 
-const Line = styled.Text`
+const Line = styled.View`
   background-color: ${({ theme }) => theme.colors.grey};
   height: 50%;
   width: 2px;
 `;
 
-interface BubbleProps {
-  word: string;
-  number: number;
-  smallBubble?: boolean;
-  hideDetails?: boolean;
-  onPress?: () => void;
-}
-
-const Bubble = ({
-  word,
-  number,
-  smallBubble = false,
-  hideDetails = false,
-  onPress,
-}: BubbleProps) => {
-  const num = number.toString();
-  return (
-    <TouchableOpacity onPress={onPress}>
-      <BubbleContainer smallBubble={smallBubble}>
-        {!hideDetails ? <BubbleNumber>{num}</BubbleNumber> : null}
-        {!hideDetails ? <Line></Line> : null}
-        <BubbleText>{word}</BubbleText>
-      </BubbleContainer>
-    </TouchableOpacity>
-  );
+// Prop types for Bubble component
+const propTypes = {
+  word: PropTypes.string.isRequired,
+  number: PropTypes.number.isRequired,
+  smallBubble: PropTypes.bool,
+  hideDetails: PropTypes.bool,
+  onPress: PropTypes.func,
+  containerStyle: ViewPropTypes.style,
 };
+
+const Bubble = React.memo(
+  ({
+    word,
+    number,
+    smallBubble = false,
+    hideDetails = false,
+    onPress,
+    containerStyle,
+  }) => {
+    const num = number.toString();
+
+    const memoizedOnPress = useCallback(() => {
+      if (onPress) {
+        onPress();
+      }
+    }, [onPress]);
+
+    return (
+      <TouchableOpacity onPress={memoizedOnPress}>
+        <BubbleContainer style={[containerStyle, { height: smallBubble ? 40 : 60 }]}>
+          {!hideDetails && <BubbleNumber>{num}</BubbleNumber>}
+          {!hideDetails && <Line />}
+          <BubbleText>{word}</BubbleText>
+        </BubbleContainer>
+      </TouchableOpacity>
+    );
+  }
+);
+
+Bubble.propTypes = propTypes;
 
 export default Bubble;

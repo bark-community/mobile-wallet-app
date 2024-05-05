@@ -1,4 +1,5 @@
-import React from "react";
+import { useState } from "react";
+import { SafeAreaView } from "react-native";
 import { useDispatch } from "react-redux";
 import { Image } from "expo-image";
 import { router } from "expo-router";
@@ -22,7 +23,7 @@ import {
 } from "../../store/walletSlice";
 import { ROUTES } from "../../constants/routes";
 
-export const SafeAreaContainer = styled.SafeAreaView<{ theme: ThemeType }>`
+export const SafeAreaContainer = styled(SafeAreaView)<{ theme: ThemeType }>`
   flex: 1;
   background-color: ${(props) => props.theme.colors.primary};
   justify-content: flex-end;
@@ -70,40 +71,62 @@ export const ImageContainer = styled.View<{ theme: ThemeType }>`
   align-items: center;
 `;
 
+export const SecondaryButtonContainer = styled.TouchableOpacity`
+  padding: 10px 20px;
+  border-radius: 5px;
+  align-items: center;
+  height: 60px;
+  justify-content: center;
+  width: 100%;
+  border-radius: ${(props) => props.theme.borderRadius.large};
+`;
+
+export const SecondaryButtonText = styled.Text<{ theme: ThemeType }>`
+  font-family: ${(props) => props.theme.fonts.families.openBold};
+  font-size: ${(props) => props.theme.fonts.sizes.header};
+  color: ${(props) => props.theme.fonts.colors.primary};
+`;
+
+export const ErrorMessage = styled.Text<{ theme: ThemeType }>`
+  font-family: ${(props) => props.theme.fonts.families.openRegular};
+  font-size: ${(props) => props.theme.fonts.sizes.medium};
+  color: ${(props) => props.theme.colors.error};
+  margin-top: ${(props) => props.theme.spacing.small};
+`;
+
 export default function WalletSetup() {
   const dispatch = useDispatch();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const walletSetup = () => {
-    const wallets = createWallet();
-
-    if (Object.keys(wallets).length > 0) {
+  const handleCreateWallet = async () => {
+    setLoading(true);
+    try {
+      const wallets = await createWallet();
       saveWallet(JSON.stringify(wallets));
-      const etherAddress = wallets.ethereumWallet.address;
-      const masterMnemonicPhrase = wallets.ethereumWallet.mnemonic.phrase;
-      const masterPrivateKey = wallets.ethereumWallet.privateKey;
+      const { ethereumWallet, solanaWallet, barkWallet } = wallets;
 
-      const etherPublicKey = wallets.ethereumWallet.publicKey;
+      const { address: etherAddress, publicKey: etherPublicKey } = ethereumWallet;
+      const { publicKey: solanaAddress } = solanaWallet;
+      const { address: barkAddress, publicKey: barkPublicKey } = barkWallet;
 
-      const solanaAddress = wallets.solanaWallet.publicKey.toBase58();
-      const solanaPublicKey = wallets.solanaWallet.publicKey.toBase58();
-
-      const barkAddress = "bark_address_example";
-      const barkPublicKey = "bark_public_key_example";
-
-      savePhrase(masterMnemonicPhrase);
-      savePrivateKey(masterPrivateKey);
+      savePhrase(ethereumWallet.mnemonic.phrase);
+      savePrivateKey(ethereumWallet.privateKey);
       setSeedPhraseConfirmation(false);
 
       dispatch(saveEthereumAddress(etherAddress));
       dispatch(saveEthereumPublicKey(etherPublicKey));
 
-      dispatch(saveSolanaAddress(solanaAddress));
-      dispatch(saveSolanaPublicKey(solanaPublicKey));
+      dispatch(saveSolanaAddress(solanaAddress.toBase58()));
+      dispatch(saveSolanaPublicKey(solanaAddress.toBase58()));
 
       dispatch(saveBarkAddress(barkAddress));
       dispatch(saveBarkPublicKey(barkPublicKey));
 
       router.push(ROUTES.seedPhrase);
+    } catch (error) {
+      setError("Failed to create wallet. Please try again.");
+      setLoading(false);
     }
   };
 
@@ -126,8 +149,15 @@ export default function WalletSetup() {
         </TextContainer>
       </ContentContainer>
       <ButtonContainer>
-        <Button onPress={walletSetup} title="Create Wallet" />
-        <Button onPress={() => router.push(ROUTES.walletImportOptions)} title="Import Wallet" />
+        <Button loading={loading} onPress={handleCreateWallet} title="Create Wallet" />
+        <SecondaryButtonContainer
+          onPress={() => router.push(ROUTES.walletImportOptions)}
+        >
+          <SecondaryButtonText>
+            Got a wallet? Let's import it
+          </SecondaryButtonText>
+        </SecondaryButtonContainer>
+        {error && <ErrorMessage>{error}</ErrorMessage>}
       </ButtonContainer>
     </SafeAreaContainer>
   );

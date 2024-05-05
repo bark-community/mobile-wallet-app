@@ -1,4 +1,4 @@
-import { createSlice, PayloadAction, createAsyncThunk, Middleware } from "@reduxjs/toolkit";
+import { createSlice, createAction, createAsyncThunk, Middleware } from "@reduxjs/toolkit";
 import { ethers } from "ethers";
 import { RootState } from "./index";
 import { fetchTransactions } from "../utils/fetchTransactions";
@@ -34,9 +34,9 @@ const initialState: WalletState = {
   bark: { balance: 0, transactions: [], status: "idle", address: "", publicKey: "" },
 };
 
-export const fetchEthereumTransactions = createAsyncThunk(
+export const fetchEthereumTransactions = createAsyncThunk<Transaction[], string, { rejectValue: string }>(
   "wallet/fetchEthereumTransactions",
-  async (address: string, { rejectWithValue }): Promise<Transaction[]> => {
+  async (address, { rejectWithValue }) => {
     try {
       const transactions = await fetchTransactions(address);
       return transactions;
@@ -46,21 +46,14 @@ export const fetchEthereumTransactions = createAsyncThunk(
   }
 );
 
+export const updateBalance = createAction<{ type: keyof WalletState; balance: number }>("wallet/updateBalance");
+export const updateWalletState = createAction<{ walletType: keyof WalletState; key: keyof BarkWallet; value: any }>("wallet/updateWalletState");
+export const addTransaction = createAction<{ type: keyof WalletState; transaction: Transaction }>("wallet/addTransaction");
+
 export const walletSlice = createSlice({
   name: "wallet",
   initialState,
-  reducers: {
-    updateWalletState: (state, action: PayloadAction<{ walletType: keyof WalletState; key: keyof BarkWallet; value: any }>) => {
-      const { walletType, key, value } = action.payload;
-      state[walletType][key] = value;
-    },
-    updateBalance: (state, action: PayloadAction<{ type: keyof WalletState; balance: number }>) => {
-      state[action.payload.type].balance = action.payload.balance;
-    },
-    addTransaction: (state, action: PayloadAction<{ type: keyof WalletState; transaction: Transaction }>) => {
-      state[action.payload.type].transactions.push(action.payload.transaction);
-    }
-  },
+  reducers: {},
   extraReducers: (builder) => {
     builder
       .addCase(fetchEthereumTransactions.pending, (state) => {
@@ -77,22 +70,14 @@ export const walletSlice = createSlice({
   }
 });
 
-export const {
-  updateWalletState,
-  updateBalance,
-  addTransaction
-} = walletSlice.actions;
-
-export default walletSlice.reducer;
-
-export const webSocketMiddleware: Middleware =
+export const webSocketMiddleware: Middleware<{}, RootState> =
   (store) =>
   (next) =>
   async (action) => {
     next(action);
 
-    if (action.type === "wallet/saveAddress") {
-      const state = store.getState() as RootState;
+    if (action.type === fetchEthereumTransactions.pending.toString()) {
+      const state = store.getState();
       const { ethereum } = state.wallet;
 
       try {
@@ -103,3 +88,5 @@ export const webSocketMiddleware: Middleware =
       }
     }
   };
+
+export default walletSlice.reducer;

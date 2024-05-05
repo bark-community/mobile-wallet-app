@@ -1,51 +1,49 @@
-import axios from 'axios';
+import { Connection, PublicKey, clusterApiUrl, ConfirmedSignatureInfo } from "@solana/web3.js";
 
-// Define the expiration time for cache (1 minute)
-const CACHE_EXPIRATION_TIME = 60000;
+// Initialize Solana connection
+const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
 
-// Define a cache object to store balance data
-let balanceCache: { [address: string]: { balance: number; timestamp: number } } = {};
+/**
+ * Retrieves Bark balance for a specific address on the Solana blockchain.
+ * @param {string} publicKeyString - The public key string of the address.
+ * @returns {Promise<number>} - A promise that resolves to the Bark balance.
+ */
+export const getSolanaBarkBalance = async (publicKeyString: string): Promise<number> => {
+  try {
+    const publicKey = new PublicKey(publicKeyString);
+    const balance = await connection.getBalance(publicKey);
+    const barkBalance = balance / 1e9; // Convert lamports to Bark
+    return barkBalance;
+  } catch (error) {
+    console.error("Error fetching Bark balance:", error);
+    throw error;
+  }
+};
 
-// Simulate fetching Bark balance from a backend or API
-export const fetchBarkBalanceFromAPI = async (address: string): Promise<number> => {
-    // Check if balance data is already cached and not expired
-    const cachedData = balanceCache[address];
-    if (cachedData && Date.now() - cachedData.timestamp < CACHE_EXPIRATION_TIME) {
-        return cachedData.balance; // Return cached balance
+/**
+ * Retrieves transactions for a specific Solana wallet address.
+ * @param {string} walletAddress - The Solana wallet address.
+ * @returns {Promise<ConfirmedSignatureInfo | null>} - A promise that resolves to the first confirmed signature info.
+ */
+export const getSolanaTransactionsByWallet = async (walletAddress: string): Promise<ConfirmedSignatureInfo | null> => {
+  const publicKey = new PublicKey(walletAddress);
+
+  try {
+    const signatures = await connection.getConfirmedSignaturesForAddress2(publicKey);
+    const signature = signatures.map((signature) => signature.signature)[0];
+
+    if (!signature) {
+      return null;
     }
 
-    try {
-        // Fetch balance from the API
-        const response = await axios.get<number>(`/api/bark/balance/${address}`);
-        const balance = response.data;
+    const response = await connection.getParsedTransaction(signature, {
+      maxSupportedTransactionVersion: 0,
+    });
 
-        // Update cache with fetched balance
-        balanceCache[address] = { balance, timestamp: Date.now() };
-        
-        // Return fetched balance
-        return balance;
-    } catch (error) {
-        console.error('Failed to fetch Bark balance:', error);
-        throw new Error('Failed to fetch Bark balance. Please try again later.');
-    }
-}
-
-// Simulate fetching Bark transactions from a backend or API
-export const fetchBarkTransactionsFromAPI = async (address: string): Promise<Transaction[]> => {
-    try {
-        // Fetch transactions from the API
-        const response = await axios.get<Transaction[]>(`/api/bark/transactions/${address}`);
-        return response.data; // Return fetched transactions
-    } catch (error) {
-        console.error('Failed to fetch Bark transactions:', error);
-        throw new Error('Failed to fetch Bark transactions. Please try again later.');
-    }
-}
-
-// Interface for transaction object
-interface Transaction {
-    id: string;
-    type: string;
-    amount: number;
-    date: string;
-}
+    console.log("Response from Solana getTransactionsByWallet:", response);
+    return response;
+  } catch (error) {
+    console.error("Failed to fetch Solana transactions:", error);
+    return null;
+  }
+};

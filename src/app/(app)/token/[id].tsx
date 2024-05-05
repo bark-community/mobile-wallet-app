@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { View, SafeAreaView, FlatList } from "react-native";
+import { useEffect, useState, useCallback } from "react";
+import { View, SafeAreaView, FlatList, RefreshControl } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import { router, useLocalSearchParams } from "expo-router";
 import styled, { useTheme } from "styled-components/native";
@@ -9,9 +9,8 @@ import type { RootState, AppDispatch } from "../../../store";
 import {
   fetchEthereumBalance,
   updateSolanaBalance,
-  fetchSolanaTransactions,
   fetchEthereumTransactions,
-  updateBarkBalance
+  // fetchSolanaTransactions,
 } from "../../../store/walletSlice";
 import { getSolanaBalance } from "../../../utils/solanaHelpers";
 import { capitalizeFirstLetter } from "../../../utils/capitalizeFirstLetter";
@@ -22,12 +21,13 @@ import ReceiveIcon from "../../../assets/svg/receive.svg";
 import TokenInfoCard from "../../../components/TokenInfoCard/TokenInfoCard";
 import SolanaIcon from "../../../assets/svg/solana.svg";
 import EthereumIcon from "../../../assets/svg/ethereum_plain.svg";
-import BarkIcon from "../../../assets/svg/bark.svg";
+import BarkIcon from "../../../assets/svg/bark.svg"; // Added
 import { AssetTransfer } from "../../../types";
 import CryptoInfoCard from "../../../components/CryptoInfoCard/CryptoInfoCard";
 import { truncateWalletAddress } from "../../../utils/truncateWalletAddress";
 import { TICKERS } from "../../../constants/tickers";
 import { Chains } from "../../../types";
+import { FETCH_PRICES_INTERVAL } from "../../../constants/price";
 
 const SafeAreaContainer = styled(SafeAreaView)<{ theme: ThemeType }>`
   flex: 1;
@@ -103,33 +103,6 @@ const ComingSoonText = styled.Text<{ theme: ThemeType }>`
   margin-top: ${(props) => props.theme.spacing.medium};
 `;
 
-// Placeholder API functions
-const fetchBarkTransactions = async (tokenAddress) => {
-  try {
-    // Implement logic to fetch Bark transactions using your backend API
-    // Replace the URL with your actual endpoint
-    const response = await fetch(`https://api.barktoken.app/bark/transactions/${tokenAddress}`);
-    const data = await response.json();
-    return data; // Return the fetched transactions
-  } catch (error) {
-    console.error("Error fetching Bark transactions:", error);
-    throw error;
-  }
-};
-
-const fetchBarkPrice = async () => {
-  try {
-    // Implement logic to fetch Bark price using your backend API
-    // Replace the URL with your actual endpoint
-    const response = await fetch('https://api.barktoken.app/price'); // change correct uri
-    const data = await response.json();
-    return data.price; // Return the fetched Bark price
-  } catch (error) {
-    console.error("Error fetching Bark price:", error);
-    throw error;
-  }
-};
-
 export default function Index() {
   const dispatch = useDispatch<AppDispatch>();
   const { id } = useLocalSearchParams();
@@ -147,47 +120,128 @@ export default function Index() {
   const prices = useSelector((state: RootState) => state.price.data);
   const solPrice = prices.solana.usd;
   const ethPrice = prices.ethereum.usd;
-  const barkPrice = useSelector((state: RootState) => state.price.data.bark?.usd); // Access Bark price from Redux store
-  
+  const barkPrice = prices.bark.usd; // Added
+
   const [usdBalance, setUsdBalance] = useState(0);
   const [transactions, setTransactions] = useState<AssetTransfer[]>([]);
-  
+  const [refreshing, setRefreshing] = useState(false);
+
   const ticker = TICKERS[chainName];
   const isSolana = chainName === Chains.Solana;
-  const isBark = chainName === Chains.Solana;
   const isEthereum = chainName === Chains.Ethereum;
-  const Icon = isBark ? BarkIcon : isSolana ? SolanaIcon : EthereumIcon;
+  const isBark = chainName === Chains.Bark; // Added
+  const Icon = isSolana ? SolanaIcon : isEthereum ? EthereumIcon : BarkIcon; // Updated
 
-  useEffect(() => {
-    const fetchBarkData = async () => {
-      try {
-        // Fetch Bark transactions
-        const barkTransactions = await fetchBarkTransactions(tokenAddress);
-        setTransactions(barkTransactions);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchTokenBalance();
+    await fetchPrices();
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 2000);
+  }, [dispatch]);
 
-        // Fetch Bark price
-        const barkPriceData = await fetchBarkPrice();
-        dispatch(updateBarkBalance(barkPriceData));
-      } catch (error) {
-        console.error("Error fetching Bark data:", error);
-      }
-    };
-
-    if (isSolana && tokenAddress) {
-      fetchBarkData();
+  const renderItem = ({ item }) => {
+    if (
+      item.category === "external" &&
+      item.from.toLowerCase() === tokenAddress.toLowerCase()
+    ) {
+      return (
+        <CryptoInfoCard
+          title="Sent"
+          caption={`To ${truncateWalletAddress(item.to)}`}
+          details={`- ${item.value} ${item.asset}`}
+          icon={<Icon width={35} height={35} fill={theme.colors.white} />}
+        />
+      );
     }
-  }, [tokenAddress]);
+
+    if (
+      item.category === "external" &&
+      item.to.toLowerCase() === tokenAddress.toLowerCase()
+    ) {
+      return (
+        <CryptoInfoCard
+          title="Received"
+          caption={`From ${truncateWalletAddress(item.from)}`}
+          details={`+ ${item.value} ${item.asset}`}
+          icon={<Icon width={35} height={35} fill={theme.colors.white} />}
+        />
+      );
+    }
+  };
+
+  const fetchPrices = async () => {
+    if (isEthereum) {
+      dispatch(fetchEthereumTransactions(tokenAddress));
+      const usd = ethPrice * tokenBalance;
+      setUsdBalance(usd);
+    }
+
+    if (isSolana) {
+      // dispatch(fetchSolanaTransactions(tokenAddress));
+      const usd = solPrice * tokenBalance;
+      setUsdBalance(usd);
+    }
+
+    if (isBark) {
+      const usd = barkPrice * tokenBalance;
+      setUsdBalance(usd);
+    }
+  };
+
+  const fetchSolanaBalance = async () => {
+    const currentSolBalance = await getSolanaBalance(tokenAddress);
+    dispatch(updateSolanaBalance(currentSolBalance));
+  };
+
+  const fetchTokenBalance = async () => {
+    if (isSolana && tokenAddress) {
+      fetchSolanaBalance();
+    }
+
+    if (isEthereum && tokenAddress) {
+      dispatch(fetchEthereumBalance(tokenAddress));
+    }
+  };
+
+  const setTokenTransactions = async () => {
+    if (transactionHistory.length !== 0 && isEthereum) {
+      const walletTransactions = transactionHistory.transfers.filter(
+        (tx: AssetTransfer) => {
+          return tx.asset === ticker;
+        }
+      );
+      setTransactions(walletTransactions.reverse());
+    }
+  };
 
   useEffect(() => {
-    // Update USD balance whenever token balance or Bark price changes
-    const updatedUsdBalance = barkPrice * tokenBalance;
-    setUsdBalance(updatedUsdBalance);
-  }, [tokenBalance, barkPrice]);
+    const intervalId = setInterval(async () => {
+      await fetchTokenBalance();
+      await fetchPrices();
+    }, FETCH_PRICES_INTERVAL);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [dispatch]);
+
+  useEffect(() => {
+    setTokenTransactions();
+  }, [transactionHistory]);
 
   return (
     <SafeAreaContainer>
       <ContentContainer>
         <FlatList
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.colors.white}
+            />
+          }
           ListHeaderComponent={
             <>
               <BalanceContainer>
@@ -236,28 +290,7 @@ export default function Index() {
             </>
           }
           data={transactions}
-          renderItem={({ item }) => (
-            <>
-              {item.category === "external" &&
-                item.from.toLowerCase() === tokenAddress.toLowerCase() && (
-                  <CryptoInfoCard
-                    title="Sent"
-                    caption={`To ${truncateWalletAddress(item.to)}`}
-                    details={`- ${item.value} ${item.asset}`}
-                    icon={<Icon width={35} height={35} fill={theme.colors.white} />}
-                  />
-                )}
-              {item.category === "external" &&
-                item.to.toLowerCase() === tokenAddress.toLowerCase() && (
-                  <CryptoInfoCard
-                    title="Received"
-                    caption={`From ${truncateWalletAddress(item.from)}`}
-                    details={`+ ${item.value} ${item.asset}`}
-                    icon={<Icon width={35} height={35} fill={theme.colors.white} />}
-                  />
-                )}
-            </>
-          )}
+          renderItem={renderItem}
           keyExtractor={(item) => item.uniqueId}
           contentContainerStyle={{ gap: 10 }}
           ListEmptyComponent={

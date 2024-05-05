@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { View, SafeAreaView, ScrollView } from "react-native";
+import React, { useEffect, useState, useCallback } from "react";
+import { View, SafeAreaView, ScrollView, RefreshControl } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import { router, Link } from "expo-router";
 import styled, { useTheme } from "styled-components/native";
@@ -7,7 +7,12 @@ import { ROUTES } from "../../constants/routes";
 import type { ThemeType } from "../../styles/theme";
 import type { RootState, AppDispatch } from "../../store";
 import { fetchPrices } from "../../store/priceSlice";
-import { fetchEthereumBalance, updateSolanaBalance, fetchBarkBalance } from "../../store/walletSlice";
+import {
+  fetchEthereumBalance,
+  updateSolanaBalance,
+  fetchBarkBalance,
+  updateBarkBalance,
+} from "../../store/walletSlice";
 import { formatDollar } from "../../utils/formatDollars";
 import { getSolanaBalance } from "../../utils/solanaHelpers";
 import PrimaryButton from "../../components/PrimaryButton/PrimaryButton";
@@ -74,33 +79,52 @@ const SectionTitle = styled.Text<{ theme: ThemeType }>`
 export default function Index() {
   const dispatch = useDispatch<AppDispatch>();
   const theme = useTheme();
-  const ethWalletAddress = useSelector((state: RootState) => state.wallet.ethereum.address);
-  const ethBalance = useSelector((state: RootState) => state.wallet.ethereum.balance);
-  const solWalletAddress = useSelector((state: RootState) => state.wallet.solana.address);
-  const solBalance = useSelector((state: RootState) => state.wallet.solana.balance);
-  const barkWalletAddress = useSelector((state: RootState) => state.wallet.bark.address);
-  const barkBalance = useSelector((state: RootState) => state.wallet.bark.balance);
+  const ethWalletAddress = useSelector(
+    (state: RootState) => state.wallet.ethereum.address
+  );
+  const ethBalance = useSelector(
+    (state: RootState) => state.wallet.ethereum.balance
+  );
+  const solWalletAddress = useSelector(
+    (state: RootState) => state.wallet.solana.address
+  );
+  const solBalance = useSelector(
+    (state: RootState) => state.wallet.solana.balance
+  );
+  const barkWalletAddress = useSelector(
+    (state: RootState) => state.wallet.bark.address
+  );
+  const barkBalance = useSelector(
+    (state: RootState) => state.wallet.bark.balance
+  );
 
   const prices = useSelector((state: RootState) => state.price.data);
   const solPrice = prices.solana.usd;
   const ethPrice = prices.ethereum.usd;
-  const barkPrice = prices.bark?.usd || 0;
+  const barkPrice = prices.bark.usd;
 
+  const [refreshing, setRefreshing] = useState(false);
   const [usdBalance, setUsdBalance] = useState(0);
   const [solUsd, setSolUsd] = useState(0);
   const [ethUsd, setEthUsd] = useState(0);
   const [barkUsd, setBarkUsd] = useState(0);
 
-  useEffect(() => {
-    const fetchSolanaBalance = async () => {
-      const currentSolBalance = await getSolanaBalance(solWalletAddress);
-      dispatch(updateSolanaBalance(currentSolBalance));
-    };
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    dispatch(fetchPrices());
+    fetchTokenBalances();
+    updatePrices();
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 2000);
+  }, [dispatch]);
 
-    const fetchBarkData = async () => {
-      dispatch(fetchBarkBalance());
-    };
+  const fetchSolanaBalance = async () => {
+    const currentSolBalance = await getSolanaBalance(solWalletAddress);
+    dispatch(updateSolanaBalance(currentSolBalance));
+  };
 
+  const fetchTokenBalances = async () => {
     if (ethWalletAddress) {
       dispatch(fetchEthereumBalance(ethWalletAddress));
     }
@@ -110,29 +134,30 @@ export default function Index() {
     }
 
     if (barkWalletAddress) {
-      fetchBarkData();
+      dispatch(fetchBarkBalance(barkWalletAddress));
     }
-  }, [ethWalletAddress, solWalletAddress, barkWalletAddress, dispatch]);
+  };
 
-  useEffect(() => {
-    const fetchPrices = async () => {
-      const ethUsd = ethPrice * ethBalance;
-      const solUsd = solPrice * solBalance;
-      const barkUsd = barkPrice * barkBalance;
+  const updatePrices = () => {
+    const ethUsd = ethPrice * ethBalance;
+    const solUsd = solPrice * solBalance;
+    const barkUsd = barkPrice * barkBalance;
 
-      setUsdBalance(ethUsd + solUsd + barkUsd);
-      setEthUsd(ethUsd);
-      setSolUsd(solUsd);
-      setBarkUsd(barkUsd);
-    };
-
-    fetchPrices();
-  }, [ethBalance, solBalance, barkBalance, ethPrice, solPrice, barkPrice]);
+    setUsdBalance(ethUsd + solUsd + barkUsd);
+    setEthUsd(ethUsd);
+    setSolUsd(solUsd);
+    setBarkUsd(barkUsd);
+  };
 
   useEffect(() => {
     dispatch(fetchPrices());
-    const interval = setInterval(() => {
+    fetchTokenBalances();
+    updatePrices();
+
+    const interval = setInterval(async () => {
+      await fetchTokenBalances();
       dispatch(fetchPrices());
+      updatePrices();
     }, FETCH_PRICES_INTERVAL);
 
     return () => clearInterval(interval);
@@ -140,7 +165,16 @@ export default function Index() {
 
   return (
     <SafeAreaContainer>
-      <ScrollView>
+      <ScrollView
+        refreshControl={
+          <RefreshControl
+            tintColor="#fff"
+            titleColor="#fff"
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+          />
+        }
+      >
         <ContentContainer>
           <BalanceContainer>
             <BalanceText>{formatDollar(usdBalance)}</BalanceText>
@@ -180,16 +214,18 @@ export default function Index() {
                 />
               </Link>
             </CardView>
-            <CardView>
-              <Link href={ROUTES.barkDetails}>
-                <CryptoInfoCard
-                  title="Bark"
-                  caption={`${barkBalance} BARK`}
-                  details={formatDollar(barkUsd)}
-                  icon={<BarkIcon width={25} height={25} fill="#555555" />}
-                />
-              </Link>
-            </CardView>
+            {barkWalletAddress && (
+              <CardView>
+                <Link href={ROUTES.barkDetails}>
+                  <CryptoInfoCard
+                    title="Bark"
+                    caption={`${barkBalance} BARK`}
+                    details={formatDollar(barkUsd)}
+                    icon={<BarkIcon width={25} height={25} fill="#fffff" />}
+                  />
+                </Link>
+              </CardView>
+            )}
           </CryptoInfoCardContainer>
         </ContentContainer>
       </ScrollView>

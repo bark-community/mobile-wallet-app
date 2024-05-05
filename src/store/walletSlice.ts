@@ -1,70 +1,86 @@
-import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
-import { ethers } from "ethers";
-import { RootState } from "./index";
-import { fetchEthereumTransactions } from "../utils/fetchTransactions";
+import React, { useState, useEffect, useCallback } from "react";
+import { Redirect, Stack, router } from "expo-router";
+import { useSelector } from "react-redux";
+import styled, { useTheme } from "styled-components/native";
+import { ROUTES } from "../../constants/routes";
+import SettingsIcon from "../../assets/svg/settings.svg";
+import LeftIcon from "../../assets/svg/left-arrow.svg";
+import { getSeedPhraseConfirmation } from "../../hooks/use-storage-state";
 
-interface BarkWallet {
-  balance: number;
-  transactions: Transaction[];
-  status: "idle" | "loading" | "failed";
-  address: string;
-  publicKey: string;
-}
+// Styled Components
+const IconTouchContainer = styled.TouchableOpacity`
+  padding: 10px;
+`;
 
-interface WalletState {
-  ethereum: BarkWallet;
-  solana: BarkWallet;
-  bark: BarkWallet;
-}
+const HeaderIconContainer = styled.View`
+  padding: 10px;
+`;
 
-interface Transaction {
-  id: string;
-  type: string;
-  amount: number;
-  date: string;
-}
+// App Layout Component
+const AppLayout = () => {
+  const theme = useTheme();
+  const ethWallet = useSelector((state) => state.wallet.ethereum);
+  const solWallet = useSelector((state) => state.wallet.solana);
+  const barkWallet = useSelector((state) => state.wallet.bark);
+  const [isSeedPhraseConfirmed, setSeedPhraseConfirmed] = useState(false);
+  const [activeWallet, setActiveWallet] = useState("ethereum");
 
-const initialState: WalletState = {
-  ethereum: { balance: 0, transactions: [], status: "idle", address: "", publicKey: "" },
-  solana: { balance: 0, transactions: [], status: "idle", address: "", publicKey: "" },
-  bark: { balance: 0, transactions: [], status: "idle", address: "", publicKey: "" },
+  useEffect(() => {
+    const loadSeedPhraseConfirmation = async () => {
+      try {
+        const confirmation = await getSeedPhraseConfirmation();
+        setSeedPhraseConfirmed(confirmation);
+      } catch (error) {
+        console.error("Error loading seed phrase confirmation:", error);
+      }
+    };
+
+    loadSeedPhraseConfirmation();
+  }, []);
+
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.push(ROUTES.settings);
+    }
+  }, []);
+
+  const shouldRedirectToSeedPhrase = !isSeedPhraseConfirmed && (ethWallet.address || solWallet.address || barkWallet.address);
+  const shouldRedirectToWalletSetup = !ethWallet.address || !solWallet.address || !barkWallet.address;
+
+  if (shouldRedirectToSeedPhrase) {
+    return <Redirect href={ROUTES.seedPhrase} />;
+  }
+
+  if (shouldRedirectToWalletSetup) {
+    return <Redirect href={ROUTES.walletSetup} />;
+  }
+
+  return (
+    <>
+      <Stack
+        screenOptions={{
+          headerTransparent: true,
+          gestureEnabled: true,
+          headerLeft: () => (
+            <IconTouchContainer onPress={handleBack}>
+              <LeftIcon width={25} height={25} fill={theme.colors.primary} />
+            </IconTouchContainer>
+          ),
+          headerTitle: () => (
+            <HeaderIconContainer>
+              {activeWallet === "ethereum" && <EthereumIcon width={25} height={25} fill={theme.colors.primary} />}
+              {activeWallet === "solana" && <SolanaIcon width={25} height={25} fill={theme.colors.primary} />}
+              {activeWallet === "bark" && <BarkIcon width={25} height={25} fill={theme.colors.primary} />}
+            </HeaderIconContainer>
+          ),
+        }}
+      >
+        {/* Stack Screens */}
+      </Stack>
+    </>
+  );
 };
 
-export const walletSlice = createSlice({
-  name: "wallet",
-  initialState,
-  reducers: {
-    updateWalletState: (state, action: PayloadAction<{ walletType: keyof WalletState; key: keyof BarkWallet; value: any }>) => {
-      const { walletType, key, value } = action.payload;
-      state[walletType][key] = value;
-    },
-    updateBalance: (state, action: PayloadAction<{ type: keyof WalletState; balance: number }>) => {
-      state[action.payload.type].balance = action.payload.balance;
-    },
-    addTransaction: (state, action: PayloadAction<{ type: keyof WalletState; transaction: Transaction }>) => {
-      state[action.payload.type].transactions.push(action.payload.transaction);
-    }
-  },
-  extraReducers: (builder) => {
-    builder
-      .addCase(fetchEthereumTransactions.pending, (state, action) => {
-        state.ethereum.status = "loading";
-      })
-      .addCase(fetchEthereumTransactions.fulfilled, (state, action) => {
-        state.ethereum.transactions = action.payload;
-        state.ethereum.status = "idle";
-      })
-      .addCase(fetchEthereumTransactions.rejected, (state, action) => {
-        state.ethereum.status = "failed";
-        console.error("Failed to fetch transactions:", action.error.message);
-      });
-  }
-});
-
-export const {
-  updateWalletState,
-  updateBalance,
-  addTransaction
-} = walletSlice.actions;
-
-export default walletSlice.reducer;
+export default AppLayout;

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { SafeAreaView, ScrollView } from "react-native";
-import { useDispatch } from "react-redux";
+import { SafeAreaView, ScrollView, ActivityIndicator } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import styled from "styled-components/native";
@@ -15,8 +14,6 @@ import { ROUTES } from "../../constants/routes";
 const SafeAreaContainer = styled(SafeAreaView)<{ theme: ThemeType }>`
   flex: 1;
   background-color: ${(props) => props.theme.colors.lightDark};
-  justify-content: center;
-  align-items: center;
 `;
 
 const ContentContainer = styled.View<{ theme: ThemeType }>`
@@ -82,9 +79,10 @@ const LogoContainer = styled.View``;
 
 export default function Page() {
   const theme = useTheme();
-  const dispatch = useDispatch();
   const [buttonText, setButtonText] = useState("Copy to clipboard");
   const [seedPhrase, setSeedPhrase] = useState<string[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>("");
 
   const handleCopy = async () => {
     await Clipboard.setStringAsync(seedPhrase.join(" "));
@@ -96,8 +94,14 @@ export default function Page() {
 
   useEffect(() => {
     const fetchSeedPhrase = async () => {
-      const storedSeedPhrase: string = await getPhrase();
-      setSeedPhrase(storedSeedPhrase.split(" "));
+      try {
+        const storedSeedPhrase: string = await getPhrase();
+        setSeedPhrase(storedSeedPhrase.split(" "));
+        setLoading(false);
+      } catch (error) {
+        setError("Error fetching seed phrase.");
+        setLoading(false);
+      }
     };
 
     fetchSeedPhrase();
@@ -114,17 +118,25 @@ export default function Page() {
               Please store it somewhere safe!
             </Subtitle>
           </TextContainer>
-          <SeedPhraseContainer>
-            {seedPhrase.map((word, index) => (
-              <Bubble key={index} word={word} number={index + 1} />
-            ))}
-          </SeedPhraseContainer>
-          <SecondaryButtonContainer onPress={handleCopy}>
-            <LogoContainer>
-              <Copy fill={theme.colors.white} />
-            </LogoContainer>
-            <SecondaryButtonText>{buttonText}</SecondaryButtonText>
-          </SecondaryButtonContainer>
+          {loading ? (
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+          ) : error ? (
+            <Subtitle>{error}</Subtitle>
+          ) : (
+            <>
+              <SeedPhraseContainer>
+                {seedPhrase.map((word, index) => (
+                  <Bubble key={index} word={word} number={index + 1} />
+                ))}
+              </SeedPhraseContainer>
+              <SecondaryButtonContainer onPress={handleCopy}>
+                <LogoContainer>
+                  <Copy fill={theme.colors.white} />
+                </LogoContainer>
+                <SecondaryButtonText>{buttonText}</SecondaryButtonText>
+              </SecondaryButtonContainer>
+            </>
+          )}
         </ContentContainer>
       </ScrollView>
       <ButtonContainer>

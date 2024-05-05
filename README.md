@@ -45,8 +45,8 @@ Before you begin, ensure you have the following installed:
 To get started with BarkWallet, follow these steps:
 
 ```bash
-git clone https://github.com/bark-community/bark-mobile-wallet-app.git
-cd bark-mobile-wallet-app
+git clone https://github.com/bark-community/bark-wallet-app.git
+cd bark-wallet-app
 npm install
 ```
 

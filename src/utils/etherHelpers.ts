@@ -32,13 +32,13 @@ export function restoreWalletFromPhrase(mnemonicPhrase: string) {
 
   try {
     const ethWallet = Wallet.fromPhrase(mnemonicPhrase);
-
     const seedBuffer = mnemonicToSeedSync(mnemonicPhrase);
     const seed = new Uint8Array(
       seedBuffer.buffer,
       seedBuffer.byteOffset,
       seedBuffer.byteLength
     ).slice(0, 32);
+    console.log("seed bytes:", seed.join(", "));
     const solWallet = Keypair.fromSeed(seed);
     return {
       ethereumWallet: ethWallet,
@@ -51,22 +51,26 @@ export function restoreWalletFromPhrase(mnemonicPhrase: string) {
   }
 }
 
-export const createWallet = () => {
-  const ethereumWallet = Wallet.createRandom();
+export const createWallet = async () => {
+  try {
+    const ethereumWallet = Wallet.createRandom();
 
-  const mnemonic = ethereumWallet.mnemonic.phrase;
-  const seedBuffer = mnemonicToSeedSync(mnemonic);
-  const seed = new Uint8Array(
-    seedBuffer.buffer,
-    seedBuffer.byteOffset,
-    seedBuffer.byteLength
-  ).slice(0, 32);
-  const solanaWallet = Keypair.fromSeed(seed);
+    const mnemonic = ethereumWallet.mnemonic.phrase;
+    const seedBuffer = mnemonicToSeedSync(mnemonic);
+    const seed = new Uint8Array(
+      seedBuffer.buffer,
+      seedBuffer.byteOffset,
+      seedBuffer.byteLength
+    ).slice(0, 32);
+    const solanaWallet = Keypair.fromSeed(seed);
 
-  return {
-    ethereumWallet: ethereumWallet,
-    solanaWallet,
-  };
+    return {
+      ethereumWallet: ethereumWallet,
+      solanaWallet,
+    };
+  } catch (error) {
+    throw new Error("Failed to create wallet: " + (error as Error).message);
+  }
 };
 
 export function isAddressValid(address: string) {

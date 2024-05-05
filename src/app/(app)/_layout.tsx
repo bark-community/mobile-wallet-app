@@ -1,42 +1,52 @@
-import React, { useEffect, useState } from "react";
-import { Redirect, Stack, Link } from "expo-router";
+import React, { useState, useEffect, useCallback } from "react";
+import { Redirect, Stack, router } from "expo-router";
 import { useSelector } from "react-redux";
 import styled, { useTheme } from "styled-components/native";
-import { getSeedPhraseConfirmation } from "../../hooks/use-storage-state";
 import { ROUTES } from "../../constants/routes";
 import SettingsIcon from "../../assets/svg/settings.svg";
 import LeftIcon from "../../assets/svg/left-arrow.svg";
-import CloseIcon from "../../assets/svg/close.svg";
+import { getSeedPhraseConfirmation } from "../../hooks/use-storage-state";
 
 const IconTouchContainer = styled.TouchableOpacity`
   padding: 10px;
 `;
 
-export default function AppLayout() {
+const AppLayout = () => {
   const theme = useTheme();
   const ethWallet = useSelector((state) => state.wallet.ethereum);
   const solWallet = useSelector((state) => state.wallet.solana);
   const barkWallet = useSelector((state) => state.wallet.bark);
-  const [seedPhraseConfirmed, setSeedPhraseConfirmed] = useState(null);
+  const [isSeedPhraseConfirmed, setSeedPhraseConfirmed] = useState(false);
 
   useEffect(() => {
     const loadSeedPhraseConfirmation = async () => {
-      const confirmation = await getSeedPhraseConfirmation();
-      setSeedPhraseConfirmed(confirmation);
+      try {
+        const confirmation = await getSeedPhraseConfirmation();
+        setSeedPhraseConfirmed(confirmation);
+      } catch (error) {
+        console.error("Error loading seed phrase confirmation:", error);
+      }
     };
 
     loadSeedPhraseConfirmation();
   }, []);
 
-  if (seedPhraseConfirmed === null) {
-    return null;
-  }
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.push(ROUTES.settings);
+    }
+  }, []);
 
-  if (!seedPhraseConfirmed) {
+  const shouldRedirectToSeedPhrase = !isSeedPhraseConfirmed && (ethWallet.address || solWallet.address || barkWallet.address);
+  const shouldRedirectToWalletSetup = !ethWallet.address || !solWallet.address || !barkWallet.address;
+
+  if (shouldRedirectToSeedPhrase) {
     return <Redirect href={ROUTES.seedPhrase} />;
   }
 
-  if (!ethWallet.address || !solWallet.address || !barkWallet.address) {
+  if (shouldRedirectToWalletSetup) {
     return <Redirect href={ROUTES.walletSetup} />;
   }
 
@@ -47,74 +57,16 @@ export default function AppLayout() {
           headerTransparent: true,
           gestureEnabled: true,
           headerLeft: () => (
-            <Link href={ROUTES.settings}>
-              <SettingsIcon width={25} height={25} fill={theme.colors.primary} />
-            </Link>
+            <IconTouchContainer onPress={handleBack}>
+              <LeftIcon width={25} height={25} fill={theme.colors.primary} />
+            </IconTouchContainer>
           ),
         }}
       >
-        {/* Existing screens */}
-        {/* Bark related screens */}
-        <Stack.Screen
-          name="token/send/bark"
-          options={{
-            headerShown: true,
-            headerTransparent: true,
-            gestureEnabled: true,
-            presentation: "modal",
-            title: "Send Bark",
-          }}
-        />
-        <Stack.Screen
-          name="token/receive/bark"
-          options={{
-            headerShown: true,
-            headerTransparent: true,
-            gestureEnabled: true,
-            headerTitleStyle: {
-              color: theme.colors.white,
-            },
-            title: "Receive Bark",
-            presentation: "modal",
-            headerLeft: () => (
-              <IconTouchContainer onPress={() => router.back()}>
-                <LeftIcon width={25} height={25} fill={theme.colors.white} />
-              </IconTouchContainer>
-            ),
-          }}
-        />
-        {/* Modify existing screens */}
-        <Stack.Screen
-          name="token/send-options"
-          options={{
-            headerShown: true,
-            headerTransparent: true,
-            gestureEnabled: true,
-            presentation: "modal",
-            title: "Select Token",
-            headerLeft: () => (
-              <IconTouchContainer onPress={() => router.back()}>
-                <CloseIcon width={25} height={25} fill={theme.colors.primary} />
-              </IconTouchContainer>
-            ),
-          }}
-        />
-        <Stack.Screen
-          name="token/receive-options"
-          options={{
-            headerShown: true,
-            headerTransparent: true,
-            gestureEnabled: true,
-            presentation: "modal",
-            title: "Select Token",
-            headerLeft: () => (
-              <IconTouchContainer onPress={() => router.back()}>
-                <CloseIcon width={25} height={25} fill={theme.colors.primary} />
-              </IconTouchContainer>
-            ),
-          }}
-        />
+        {/* Stack Screens */}
       </Stack>
     </>
   );
-}
+};
+
+export default AppLayout;

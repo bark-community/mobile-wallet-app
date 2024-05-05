@@ -1,16 +1,16 @@
-import React, { useState, useEffect, ChangeEvent } from "react";
+import React, { useState } from "react";
 import { SafeAreaView } from "react-native";
-import { useSelector, useDispatch } from "react-redux";
+import { useSelector } from "react-redux";
 import { router, useLocalSearchParams } from "expo-router";
 import styled, { useTheme } from "styled-components/native";
 import { Formik } from "formik";
 import { ThemeType } from "../../../../styles/theme";
 import { TICKERS } from "../../../../constants/tickers";
 import { ROUTES } from "../../../../constants/routes";
-import type { RootState } from "../../../../store";
+import { RootState } from "../../../../store";
 import SolanaIcon from "../../../../assets/svg/solana.svg";
 import EthereumIcon from "../../../../assets/svg/ethereum_plain.svg";
-import BarkIcon from "../../../../assets/svg/bark.svg";
+import BarkIcon from "../../../../assets/svg/bark.svg"; // Added
 import { capitalizeFirstLetter } from "../../../../utils/capitalizeFirstLetter";
 import { formatDollar } from "../../../../utils/formatDollars";
 import {
@@ -18,14 +18,12 @@ import {
   calculateGasAndAmounts,
 } from "../../../../utils/etherHelpers";
 import Button from "../../../../components/Button/Button";
-import { fetchBarkBalance } from "../../../../store/walletSlice";
 
-type FormikChangeHandler = {
-  (e: ChangeEvent<any>): void;
-  <T = string | ChangeEvent<any>>(field: T): T extends ChangeEvent<any>
-    ? void
-    : (e: string | ChangeEvent<any>) => void;
-};
+interface TextInputProps {
+  isAddressInputFocused?: boolean;
+  isAmountInputFocused?: boolean;
+  theme: ThemeType;
+}
 
 const SafeAreaContainer = styled(SafeAreaView)<{ theme: ThemeType }>`
   flex: 1;
@@ -52,19 +50,20 @@ const IconBackground = styled.View<{ theme: ThemeType }>`
   padding: ${(props) => props.theme.spacing.large};
 `;
 
-const AddressTextInput = styled.TextInput<{ theme: ThemeType }>`
+const AddressTextInput = styled.TextInput<TextInputProps>`
   height: 60px;
   background-color: ${({ theme }) => theme.colors.lightDark};
   padding: ${({ theme }) => theme.spacing.medium};
   border: 1px solid
-    ${({ theme }) => theme.colors.grey};
+    ${({ theme, isAddressInputFocused }) =>
+      isAddressInputFocused ? theme.colors.primary : theme.colors.grey};
   border-radius: ${({ theme }) => theme.borderRadius.default};
   color: ${({ theme }) => theme.fonts.colors.primary};
   font-size: ${(props) => props.theme.fonts.sizes.large};
   font-family: ${(props) => props.theme.fonts.families.openRegular};
 `;
 
-const AmountTextInput = styled.TextInput<{ theme: ThemeType }>`
+const AmountTextInput = styled.TextInput<TextInputProps>`
   height: 60px;
   color: ${({ theme }) => theme.fonts.colors.primary};
   font-size: ${(props) => props.theme.fonts.sizes.large};
@@ -72,14 +71,15 @@ const AmountTextInput = styled.TextInput<{ theme: ThemeType }>`
   padding: ${({ theme }) => theme.spacing.medium};
 `;
 
-const AmountTextInputContainer = styled.View<{ theme: ThemeType }>`
+const AmountTextInputContainer = styled.View<TextInputProps>`
   height: 60px;
   flex-direction: row;
   justify-content: space-between;
   align-items: center;
   background-color: ${({ theme }) => theme.colors.lightDark};
   border: 1px solid
-    ${({ theme }) => theme.colors.grey};
+    ${({ theme, isAmountInputFocused }) =>
+      isAmountInputFocused ? theme.colors.primary : theme.colors.grey};
   border-radius: ${({ theme }) => theme.borderRadius.default};
 `;
 
@@ -142,7 +142,7 @@ const AmountDetailsView = styled.View<{ theme: ThemeType }>`
 `;
 
 const ButtonContainer = styled.View<{ theme: ThemeType }>`
-  margin-bottom: ${(props) => props.theme.spacing.small};
+  margin-bottom: ${(props) => props.theme.spacing.medium};
 `;
 
 const ButtonView = styled.View<{ theme: ThemeType }>``;
@@ -152,10 +152,9 @@ const FormWrapper = styled.View<{ theme: ThemeType }>`
   justify-content: space-between;
 `;
 
-const SendPage: React.FC = () => {
+export default function SendPage() {
   const { send } = useLocalSearchParams();
   const theme = useTheme();
-  const dispatch = useDispatch();
 
   const chainName = send as string;
   const ticker = TICKERS[chainName];
@@ -166,7 +165,7 @@ const SendPage: React.FC = () => {
   const prices = useSelector((state: RootState) => state.price.data);
   const solPrice = prices.solana.usd;
   const ethPrice = prices.ethereum.usd;
-  const barkPrice = prices.bark?.usd || 0;
+  const barkPrice = prices.bark.usd;
 
   const [isAddressInputFocused, setIsAddressInputFocused] = useState(false);
   const [isAmountInputFocused, setIsAmountInputFocused] = useState(false);
@@ -186,23 +185,15 @@ const SendPage: React.FC = () => {
 
   const renderDollarAmount = (amountValue: string) => {
     if (amountValue === "") return formatDollar(0);
-    let chainPrice;
-    if (chainName === "ethereum") {
-      chainPrice = ethPrice;
-    } else if (chainName === "bark-protocol" || chainName === "solana") {
-      chainPrice = solPrice;
-    } else {
-      // Handle other chains if needed
-      chainPrice = 0; // Default value if chain is not recognized
-    }
+    const chainPrice = chainName === "ethereum" ? ethPrice : barkPrice : solPrice;
     const USDAmount = chainPrice * parseFloat(amountValue);
     const currentUSDBalance = USDAmount * tokenBalance;
     return formatDollar(currentUSDBalance);
-  };   
+  };
 
-  const handleNumericChange: FormikChangeHandler =
-    (handleChange) => (field) => {
-      return (value) => {
+  const handleNumericChange =
+    (handleChange: FormikChangeHandler) => (field: string) => {
+      return (value: string | ChangeEvent<any>) => {
         const finalValue =
           typeof value === "object" && value.target
             ? value.target.value
@@ -279,12 +270,6 @@ const SendPage: React.FC = () => {
     });
   };
 
-  useEffect(() => {
-    if (chainName === "bark") {
-      dispatch(fetchBarkBalance());
-    }
-  }, [chainName, dispatch]);
-
   return (
     <SafeAreaContainer>
       <ContentContainer>
@@ -308,14 +293,14 @@ const SendPage: React.FC = () => {
               <TextContainer>
                 <TextView>
                   <AddressTextInput
+                    isAddressInputFocused={isAddressInputFocused}
                     placeholder={`Recipient's ${capitalizeFirstLetter(
                       chainName
                     )} address`}
                     value={values.address}
                     onChangeText={handleChange("address")}
                     onFocus={() => setIsAddressInputFocused(true)}
-                    onBlur={handleBlur("email")}
-                    onEndEditing={() => setIsAddressInputFocused(false)}
+                    onBlur={handleBlur("address")}
                     placeholderTextColor={theme.colors.lightGrey}
                   />
                 </TextView>
@@ -323,12 +308,13 @@ const SendPage: React.FC = () => {
                 <TextView>
                   <AmountTextInputContainer>
                     <AmountTextInput
+                      returnKeyType="done"
+                      isAmountInputFocused={isAmountInputFocused}
                       placeholder="Amount"
                       value={values.amount}
                       onChangeText={handleNumericChange(handleChange)("amount")}
                       onFocus={() => setIsAmountInputFocused(true)}
-                      onBlur={handleBlur("email")}
-                      onEndEditing={() => setIsAmountInputFocused(false)}
+                      onBlur={handleBlur("amount")}
                       placeholderTextColor={theme.colors.lightGrey}
                       keyboardType="numeric"
                     />
@@ -381,6 +367,4 @@ const SendPage: React.FC = () => {
       </ContentContainer>
     </SafeAreaContainer>
   );
-};
-
-export default SendPage;
+}

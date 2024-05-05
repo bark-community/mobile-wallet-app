@@ -2,7 +2,7 @@ import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
 import { RootState } from "./index";
 import { fetchBarkBalanceFromAPI, fetchBarkTransactionsFromAPI } from "../utils/barkHelpers";
 
-interface CryptoWallet {
+interface BarkWallet {
   balance: number;
   transactions: Transaction[];
   status: "idle" | "loading" | "failed";
@@ -11,9 +11,9 @@ interface CryptoWallet {
 }
 
 export interface WalletState {
-  ethereum: CryptoWallet;
-  solana: CryptoWallet;
-  bark: CryptoWallet;
+  ethereum: BarkWallet;
+  solana: BarkWallet;
+  bark: BarkWallet;
 }
 
 export interface Transaction {
