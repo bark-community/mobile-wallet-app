@@ -185,7 +185,7 @@ export default function SendPage() {
 
   const renderDollarAmount = (amountValue: string) => {
     if (amountValue === "") return formatDollar(0);
-    const chainPrice = chainName === "ethereum" ? ethPrice : barkPrice : solPrice;
+    const chainPrice = chainName === "ethereum" ? ethPrice : (barkPrice ? barkPrice : solPrice);
     const USDAmount = chainPrice * parseFloat(amountValue);
     const currentUSDBalance = USDAmount * tokenBalance;
     return formatDollar(currentUSDBalance);
